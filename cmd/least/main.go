@@ -72,7 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&providerName, "provider", "", "IaC provider (auto-detected if not specified)")
 
 	generateCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
-	generateCmd.Flags().StringVarP(&format, "format", "f", "json", "Output format (json, terraform)")
+	generateCmd.Flags().StringVarP(&format, "format", "f", "json", "Output format: json, terraform (or tf)")
 
 	checkCmd.Flags().StringVarP(&policyFile, "policy", "p", "", "Existing IAM policy JSON file")
 	checkCmd.Flags().StringVarP(&policyDir, "policy-dir", "d", "", "Directory with IaC IAM policy definitions")
@@ -137,18 +137,26 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generating policy: %w", err)
 	}
 
-	jsonStr, err := iamPolicy.ToJSON()
-	if err != nil {
-		return fmt.Errorf("converting policy to JSON: %w", err)
+	var output string
+	switch format {
+	case "json":
+		output, err = iamPolicy.ToJSON()
+		if err != nil {
+			return fmt.Errorf("converting policy to JSON: %w", err)
+		}
+	case "terraform", "tf":
+		output = iamPolicy.ToTerraform()
+	default:
+		return fmt.Errorf("unsupported format: %s (use 'json' or 'terraform')", format)
 	}
 
 	if outputFile != "" {
-		if err := os.WriteFile(outputFile, []byte(jsonStr), 0644); err != nil {
+		if err := os.WriteFile(outputFile, []byte(output), 0644); err != nil {
 			return fmt.Errorf("writing output file: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Policy written to: %s\n", outputFile)
 	} else {
-		fmt.Println(jsonStr)
+		fmt.Println(output)
 	}
 
 	return nil

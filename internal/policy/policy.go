@@ -94,6 +94,50 @@ func (p *IAMPolicy) ToJSON() (string, error) {
 	return string(data), nil
 }
 
+// ToTerraform converts the policy to Terraform HCL (aws_iam_policy_document)
+func (p *IAMPolicy) ToTerraform() string {
+	var b strings.Builder
+
+	b.WriteString(`data "aws_iam_policy_document" "least_privilege" {`)
+	b.WriteString("\n")
+
+	for _, stmt := range p.Statement {
+		b.WriteString("  statement {\n")
+
+		if stmt.Sid != "" {
+			b.WriteString(`    sid    = "`)
+			b.WriteString(stmt.Sid)
+			b.WriteString("\"\n")
+		}
+
+		b.WriteString(`    effect = "`)
+		b.WriteString(stmt.Effect)
+		b.WriteString("\"\n")
+
+		b.WriteString("\n    actions = [\n")
+		for _, action := range stmt.Action {
+			b.WriteString(`      "`)
+			b.WriteString(action)
+			b.WriteString("\",\n")
+		}
+		b.WriteString("    ]\n")
+
+		b.WriteString("\n    resources = [\n")
+		for _, resource := range stmt.Resource {
+			b.WriteString(`      "`)
+			b.WriteString(resource)
+			b.WriteString("\",\n")
+		}
+		b.WriteString("    ]\n")
+
+		b.WriteString("  }\n")
+	}
+
+	b.WriteString("}\n")
+
+	return b.String()
+}
+
 // ParsePolicy parses a JSON IAM policy
 func ParsePolicy(data []byte) (*IAMPolicy, error) {
 	var policy IAMPolicy
