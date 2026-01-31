@@ -12,3 +12,6 @@
 
 # Test coverage
 coverage.out
+
+# CloudFormation schemas (fetched from AWS, not redistributed)
+internal/schema/data/
