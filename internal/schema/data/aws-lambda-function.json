@@ -1,0 +1,63 @@
+{
+  "typeName": "AWS::Lambda::Function",
+  "description": "The AWS::Lambda::Function resource creates a Lambda function.",
+  "handlers": {
+    "create": {
+      "permissions": [
+        "lambda:CreateFunction",
+        "lambda:GetFunction",
+        "lambda:PutFunctionConcurrency",
+        "lambda:TagResource",
+        "lambda:GetCodeSigningConfig",
+        "iam:PassRole",
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "kms:Decrypt"
+      ]
+    },
+    "read": {
+      "permissions": [
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:GetFunctionCodeSigningConfig",
+        "lambda:ListTags",
+        "lambda:GetPolicy"
+      ]
+    },
+    "update": {
+      "permissions": [
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:UpdateFunctionCode",
+        "lambda:PutFunctionConcurrency",
+        "lambda:DeleteFunctionConcurrency",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:PutFunctionCodeSigningConfig",
+        "lambda:DeleteFunctionCodeSigningConfig",
+        "iam:PassRole",
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "kms:Decrypt"
+      ]
+    },
+    "delete": {
+      "permissions": [
+        "lambda:DeleteFunction",
+        "lambda:GetFunction"
+      ]
+    },
+    "list": {
+      "permissions": [
+        "lambda:ListFunctions"
+      ]
+    }
+  }
+}

@@ -1,11 +1,14 @@
+//go:generate go run ./gen/main.go
+
+// Package mapping provides IAM permission mappings for Terraform resource types.
+//
+// Mappings are derived from CloudFormation Resource Schemas, which contain
+// the authoritative list of IAM permissions for each AWS resource type.
+//
+// To update mappings:
+//  1. Run scripts/fetch-schemas.sh to download latest schemas
+//  2. Run go generate ./internal/mapping to regenerate mapping code
 package mapping
-
-import (
-	"context"
-	"sync"
-
-	"github.com/mizzy/least/internal/schema"
-)
 
 // ResourceMapping defines IAM actions required for a Terraform resource type
 type ResourceMapping struct {
@@ -15,65 +18,7 @@ type ResourceMapping struct {
 	Delete []string
 }
 
-// Resolver resolves IAM permissions for resource types
-type Resolver struct {
-	schemaStore   *schema.Store
-	schemaFetcher *schema.Fetcher
-	useSchema     bool
-	mu            sync.RWMutex
-}
-
-// ResolverOption configures the Resolver
-type ResolverOption func(*Resolver)
-
-// WithSchemaStore enables schema-based permission resolution
-func WithSchemaStore(store *schema.Store) ResolverOption {
-	return func(r *Resolver) {
-		r.schemaStore = store
-		r.schemaFetcher = schema.NewFetcher(store)
-		r.useSchema = true
-	}
-}
-
-// NewResolver creates a new permission resolver
-func NewResolver(opts ...ResolverOption) *Resolver {
-	r := &Resolver{}
-	for _, opt := range opts {
-		opt(r)
-	}
-	return r
-}
-
-// GetActionsForResourceType returns all IAM actions needed for a resource type
-// It first tries CloudFormation schema, then falls back to hardcoded mappings
-func (r *Resolver) GetActionsForResourceType(ctx context.Context, resourceType string) []string {
-	// Try schema-based resolution first
-	if r.useSchema && r.schemaStore != nil {
-		cfnType := schema.TerraformToCfnType(resourceType)
-		if cfnType != "" {
-			if perms, err := r.schemaStore.GetPermissions(cfnType); err == nil {
-				return perms.All
-			}
-
-			// Try fetching from AWS if CLI is available
-			if r.schemaFetcher != nil && schema.IsAWSCLIAvailable() {
-				if s, err := r.schemaFetcher.FetchSchema(ctx, cfnType); err == nil {
-					if perms, _ := r.schemaStore.GetPermissions(cfnType); perms != nil {
-						// Cache to file
-						_ = r.schemaStore.SaveToCache(s)
-						return perms.All
-					}
-				}
-			}
-		}
-	}
-
-	// Fallback to hardcoded mappings
-	return GetActionsForResource(resourceType)
-}
-
 // GetActionsForResource returns all IAM actions needed for a resource type
-// Uses hardcoded mappings (legacy function for backwards compatibility)
 func GetActionsForResource(resourceType string) []string {
 	mapping, ok := fallbackMappings[resourceType]
 	if !ok {
