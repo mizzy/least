@@ -72,7 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&providerName, "provider", "", "IaC provider (auto-detected if not specified)")
 
 	generateCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
-	generateCmd.Flags().StringVarP(&format, "format", "f", "json", "Output format: json, terraform (or tf)")
+	generateCmd.Flags().StringVarP(&format, "format", "f", "terraform", "Output format: terraform (or tf), json")
 
 	checkCmd.Flags().StringVarP(&policyFile, "policy", "p", "", "Existing IAM policy JSON file")
 	checkCmd.Flags().StringVarP(&policyDir, "policy-dir", "d", "", "Directory with IaC IAM policy definitions")
