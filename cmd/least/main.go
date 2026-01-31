@@ -45,6 +45,7 @@ var checkCmd = &cobra.Command{
 var (
 	outputFile string
 	policyFile string
+	policyDir  string
 	format     string
 )
 
@@ -55,8 +56,8 @@ func init() {
 	generateCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
 	generateCmd.Flags().StringVarP(&format, "format", "f", "json", "Output format (json, terraform)")
 
-	checkCmd.Flags().StringVarP(&policyFile, "policy", "p", "", "Existing IAM policy file to check against")
-	checkCmd.MarkFlagRequired("policy")
+	checkCmd.Flags().StringVarP(&policyFile, "policy", "p", "", "Existing IAM policy JSON file")
+	checkCmd.Flags().StringVarP(&policyDir, "policy-dir", "d", "", "Directory with Terraform IAM policy definitions")
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
@@ -104,14 +105,18 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	fmt.Fprintf(os.Stderr, "Checking policy %s against Terraform files in: %s\n", policyFile, path)
+	if policyFile == "" && policyDir == "" {
+		return fmt.Errorf("either --policy or --policy-dir must be specified")
+	}
 
-	// Parse Terraform files
+	// Parse Terraform files for required permissions
 	p := parser.New()
 	resources, err := p.ParseDirectory(path)
 	if err != nil {
 		return fmt.Errorf("parsing terraform files: %w", err)
 	}
+
+	fmt.Fprintf(os.Stderr, "Found %d resources in: %s\n", len(resources), path)
 
 	// Generate required policy
 	gen := policy.New()
@@ -120,15 +125,30 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generating required policy: %w", err)
 	}
 
-	// Read existing policy
-	existingData, err := os.ReadFile(policyFile)
-	if err != nil {
-		return fmt.Errorf("reading policy file: %w", err)
-	}
+	// Load existing policy from either JSON file or Terraform directory
+	var existingPolicy *policy.IAMPolicy
 
-	existingPolicy, err := policy.ParsePolicy(existingData)
-	if err != nil {
-		return fmt.Errorf("parsing existing policy: %w", err)
+	if policyDir != "" {
+		fmt.Fprintf(os.Stderr, "Loading IAM policies from Terraform: %s\n", policyDir)
+		iamDocs, err := p.ParseIAMPolicies(policyDir)
+		if err != nil {
+			return fmt.Errorf("parsing IAM policies: %w", err)
+		}
+		if len(iamDocs) == 0 {
+			return fmt.Errorf("no IAM policies found in %s", policyDir)
+		}
+		fmt.Fprintf(os.Stderr, "Found %d IAM policy documents\n", len(iamDocs))
+		existingPolicy = policy.FromParsedPolicies(iamDocs)
+	} else {
+		fmt.Fprintf(os.Stderr, "Loading IAM policy from JSON: %s\n", policyFile)
+		existingData, err := os.ReadFile(policyFile)
+		if err != nil {
+			return fmt.Errorf("reading policy file: %w", err)
+		}
+		existingPolicy, err = policy.ParsePolicy(existingData)
+		if err != nil {
+			return fmt.Errorf("parsing existing policy: %w", err)
+		}
 	}
 
 	// Check policies

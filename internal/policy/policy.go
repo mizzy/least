@@ -120,3 +120,32 @@ func (p *IAMPolicy) GetAllActions() []string {
 	sort.Strings(actions)
 	return actions
 }
+
+// FromParsedPolicies creates an IAMPolicy from parsed Terraform IAM policies
+func FromParsedPolicies(docs []parser.IAMPolicyDoc) *IAMPolicy {
+	actionSet := make(map[string]bool)
+
+	for _, doc := range docs {
+		for _, action := range doc.GetAllActions() {
+			actionSet[action] = true
+		}
+	}
+
+	actions := make([]string, 0, len(actionSet))
+	for action := range actionSet {
+		actions = append(actions, action)
+	}
+	sort.Strings(actions)
+
+	return &IAMPolicy{
+		Version: "2012-10-17",
+		Statement: []Statement{
+			{
+				Sid:      "CombinedPolicy",
+				Effect:   "Allow",
+				Action:   actions,
+				Resource: []string{"*"},
+			},
+		},
+	}
+}
