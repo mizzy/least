@@ -1,16 +1,30 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/mizzy/least/internal/checker"
-	"github.com/mizzy/least/internal/parser"
 	"github.com/mizzy/least/internal/policy"
+	"github.com/mizzy/least/internal/provider"
+	"github.com/mizzy/least/internal/provider/terraform"
 	"github.com/spf13/cobra"
 )
 
 var version = "dev"
+
+// registry holds all available IaC providers
+var registry *provider.Registry
+
+func init() {
+	// Initialize provider registry
+	registry = provider.NewRegistry()
+	registry.Register(terraform.New())
+	// Future providers can be registered here:
+	// registry.Register(cloudformation.New())
+	// registry.Register(pulumi.New())
+}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -21,43 +35,78 @@ func main() {
 
 var rootCmd = &cobra.Command{
 	Use:     "least",
-	Short:   "Generate least-privilege IAM policies from Terraform code",
-	Long:    `least analyzes Terraform configurations and generates minimal IAM policies required to manage the defined resources.`,
+	Short:   "Generate least-privilege IAM policies from IaC code",
+	Long:    `least analyzes Infrastructure-as-Code configurations and generates minimal IAM policies required to manage the defined resources.`,
 	Version: version,
 }
 
 var generateCmd = &cobra.Command{
 	Use:   "generate [path]",
-	Short: "Generate IAM policy from Terraform files",
-	Long:  `Analyze Terraform files and generate a minimal IAM policy JSON.`,
+	Short: "Generate IAM policy from IaC files",
+	Long:  `Analyze IaC files and generate a minimal IAM policy JSON.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runGenerate,
 }
 
 var checkCmd = &cobra.Command{
 	Use:   "check [path]",
-	Short: "Check IAM policy against Terraform requirements",
-	Long:  `Compare an existing IAM policy against the minimal requirements from Terraform files and report over/under permissions.`,
+	Short: "Check IAM policy against IaC requirements",
+	Long:  `Compare an existing IAM policy against the minimal requirements from IaC files and report over/under permissions.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runCheck,
 }
 
 var (
-	outputFile string
-	policyFile string
-	policyDir  string
-	format     string
+	outputFile   string
+	policyFile   string
+	policyDir    string
+	format       string
+	providerName string
 )
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(checkCmd)
 
+	// Global flags
+	rootCmd.PersistentFlags().StringVar(&providerName, "provider", "", "IaC provider (auto-detected if not specified)")
+
 	generateCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
 	generateCmd.Flags().StringVarP(&format, "format", "f", "json", "Output format (json, terraform)")
 
 	checkCmd.Flags().StringVarP(&policyFile, "policy", "p", "", "Existing IAM policy JSON file")
-	checkCmd.Flags().StringVarP(&policyDir, "policy-dir", "d", "", "Directory with Terraform IAM policy definitions")
+	checkCmd.Flags().StringVarP(&policyDir, "policy-dir", "d", "", "Directory with IaC IAM policy definitions")
+}
+
+// getProvider returns the appropriate provider for the given path
+func getProvider(path string) (provider.Provider, error) {
+	if providerName != "" {
+		p := registry.Get(providerName)
+		if p == nil {
+			return nil, fmt.Errorf("unknown provider: %s", providerName)
+		}
+		return p, nil
+	}
+
+	// Auto-detect provider
+	providers, err := registry.Detect(path)
+	if err != nil {
+		return nil, fmt.Errorf("detecting provider: %w", err)
+	}
+
+	if len(providers) == 0 {
+		return nil, fmt.Errorf("no supported IaC files found in %s", path)
+	}
+
+	if len(providers) > 1 {
+		names := make([]string, len(providers))
+		for i, p := range providers {
+			names[i] = p.Name()
+		}
+		fmt.Fprintf(os.Stderr, "Multiple providers detected: %v, using %s\n", names, providers[0].Name())
+	}
+
+	return providers[0], nil
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
@@ -66,18 +115,24 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	fmt.Fprintf(os.Stderr, "Analyzing Terraform files in: %s\n", path)
-
-	p := parser.New()
-	resources, err := p.ParseDirectory(path)
+	p, err := getProvider(path)
 	if err != nil {
-		return fmt.Errorf("parsing terraform files: %w", err)
+		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Found %d resources\n", len(resources))
+	fmt.Fprintf(os.Stderr, "Using provider: %s\n", p.Name())
+	fmt.Fprintf(os.Stderr, "Analyzing files in: %s\n", path)
+
+	ctx := context.Background()
+	result, err := p.Parse(ctx, path)
+	if err != nil {
+		return fmt.Errorf("parsing files: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Found %d resources\n", len(result.Resources))
 
 	gen := policy.New()
-	iamPolicy, err := gen.Generate(resources)
+	iamPolicy, err := gen.Generate(result.Resources)
 	if err != nil {
 		return fmt.Errorf("generating policy: %w", err)
 	}
@@ -109,36 +164,48 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("either --policy or --policy-dir must be specified")
 	}
 
-	// Parse Terraform files for required permissions
-	p := parser.New()
-	resources, err := p.ParseDirectory(path)
+	p, err := getProvider(path)
 	if err != nil {
-		return fmt.Errorf("parsing terraform files: %w", err)
+		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Found %d resources in: %s\n", len(resources), path)
+	fmt.Fprintf(os.Stderr, "Using provider: %s\n", p.Name())
+
+	// Parse IaC files for required permissions
+	ctx := context.Background()
+	result, err := p.Parse(ctx, path)
+	if err != nil {
+		return fmt.Errorf("parsing files: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Found %d resources in: %s\n", len(result.Resources), path)
 
 	// Generate required policy
 	gen := policy.New()
-	requiredPolicy, err := gen.Generate(resources)
+	requiredPolicy, err := gen.Generate(result.Resources)
 	if err != nil {
 		return fmt.Errorf("generating required policy: %w", err)
 	}
 
-	// Load existing policy from either JSON file or Terraform directory
+	// Load existing policy from either JSON file or IaC directory
 	var existingPolicy *policy.IAMPolicy
 
 	if policyDir != "" {
-		fmt.Fprintf(os.Stderr, "Loading IAM policies from Terraform: %s\n", policyDir)
-		iamDocs, err := p.ParseIAMPolicies(policyDir)
+		policyProvider, err := getProvider(policyDir)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(os.Stderr, "Loading IAM policies from %s: %s\n", policyProvider.Name(), policyDir)
+		policyResult, err := policyProvider.Parse(ctx, policyDir)
 		if err != nil {
 			return fmt.Errorf("parsing IAM policies: %w", err)
 		}
-		if len(iamDocs) == 0 {
+		if len(policyResult.Policies) == 0 {
 			return fmt.Errorf("no IAM policies found in %s", policyDir)
 		}
-		fmt.Fprintf(os.Stderr, "Found %d IAM policy documents\n", len(iamDocs))
-		existingPolicy = policy.FromParsedPolicies(iamDocs)
+		fmt.Fprintf(os.Stderr, "Found %d IAM policy documents\n", len(policyResult.Policies))
+		existingPolicy = policy.FromProviderPolicies(policyResult.Policies)
 	} else {
 		fmt.Fprintf(os.Stderr, "Loading IAM policy from JSON: %s\n", policyFile)
 		existingData, err := os.ReadFile(policyFile)
@@ -152,27 +219,27 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check policies
-	result := checker.Check(existingPolicy, requiredPolicy)
+	checkResult := checker.Check(existingPolicy, requiredPolicy)
 
 	// Output results
-	if result.IsCompliant() {
+	if checkResult.IsCompliant() {
 		fmt.Println("✓ Policy is compliant with least-privilege requirements")
 		return nil
 	}
 
 	exitCode := 0
 
-	if result.HasMissing() {
+	if checkResult.HasMissing() {
 		fmt.Println("✗ Missing permissions (required but not granted):")
-		for _, action := range result.Missing {
+		for _, action := range checkResult.Missing {
 			fmt.Printf("  - %s\n", action)
 		}
 		exitCode = 1
 	}
 
-	if result.HasExcessive() {
+	if checkResult.HasExcessive() {
 		fmt.Println("⚠ Excessive permissions (granted but not required):")
-		for _, action := range result.Excessive {
+		for _, action := range checkResult.Excessive {
 			fmt.Printf("  + %s\n", action)
 		}
 		if exitCode == 0 {

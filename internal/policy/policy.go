@@ -3,9 +3,10 @@ package policy
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/mizzy/least/internal/mapping"
-	"github.com/mizzy/least/internal/parser"
+	"github.com/mizzy/least/internal/provider"
 )
 
 // IAMPolicy represents an AWS IAM policy document
@@ -43,7 +44,7 @@ func (s *StringList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Generator generates IAM policies from parsed Terraform resources
+// Generator generates IAM policies from parsed resources
 type Generator struct{}
 
 // New creates a new Generator
@@ -52,7 +53,7 @@ func New() *Generator {
 }
 
 // Generate creates a minimal IAM policy for the given resources
-func (g *Generator) Generate(resources []parser.Resource) (*IAMPolicy, error) {
+func (g *Generator) Generate(resources []provider.Resource) (*IAMPolicy, error) {
 	actionSet := make(map[string]bool)
 
 	for _, res := range resources {
@@ -73,7 +74,7 @@ func (g *Generator) Generate(resources []parser.Resource) (*IAMPolicy, error) {
 		Version: "2012-10-17",
 		Statement: []Statement{
 			{
-				Sid:      "TerraformLeastPrivilege",
+				Sid:      "LeastPrivilege",
 				Effect:   "Allow",
 				Action:   actions,
 				Resource: []string{"*"},
@@ -121,13 +122,17 @@ func (p *IAMPolicy) GetAllActions() []string {
 	return actions
 }
 
-// FromParsedPolicies creates an IAMPolicy from parsed Terraform IAM policies
-func FromParsedPolicies(docs []parser.IAMPolicyDoc) *IAMPolicy {
+// FromProviderPolicies creates an IAMPolicy from provider-parsed IAM policies
+func FromProviderPolicies(policies []provider.IAMPolicy) *IAMPolicy {
 	actionSet := make(map[string]bool)
 
-	for _, doc := range docs {
-		for _, action := range doc.GetAllActions() {
-			actionSet[action] = true
+	for _, pol := range policies {
+		for _, stmt := range pol.Statements {
+			if strings.EqualFold(stmt.Effect, "Allow") {
+				for _, action := range stmt.Actions {
+					actionSet[action] = true
+				}
+			}
 		}
 	}
 
