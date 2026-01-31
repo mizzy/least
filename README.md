@@ -29,14 +29,39 @@ go build -o least ./cmd/least
 ### Generate IAM Policy
 
 ```bash
-# Analyze Terraform files and output IAM policy JSON
+# Analyze Terraform files and output as Terraform HCL (default)
 least generate ./terraform
 
+# Output as JSON
+least generate ./terraform -f json
+
 # Save to file
-least generate ./terraform -o policy.json
+least generate ./terraform -o policy.tf
 ```
 
-Example output:
+Example output (default: Terraform HCL):
+
+```hcl
+data "aws_iam_policy_document" "least_privilege" {
+  statement {
+    sid    = "LeastPrivilege"
+    effect = "Allow"
+
+    actions = [
+      "ec2:CreateSecurityGroup",
+      "ec2:DeleteSecurityGroup",
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
+    ]
+
+    resources = [
+      "*",
+    ]
+  }
+}
+```
+
+Example output (JSON format with `-f json`):
 
 ```json
 {
@@ -48,10 +73,8 @@ Example output:
       "Action": [
         "ec2:CreateSecurityGroup",
         "ec2:DeleteSecurityGroup",
-        "ec2:DescribeSecurityGroups",
         "s3:CreateBucket",
-        "s3:DeleteBucket",
-        "s3:GetBucketTagging"
+        "s3:DeleteBucket"
       ],
       "Resource": ["*"]
     }
