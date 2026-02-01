@@ -3,6 +3,7 @@ package terraform
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"github.com/mizzy/least/internal/provider"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -74,16 +76,31 @@ func (p *Provider) Parse(ctx context.Context, path string) (*provider.ParseResul
 		Policies:  make([]provider.IAMPolicy, 0),
 	}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, fmt.Errorf("accessing path: %w", err)
+	// Track visited paths to prevent infinite loops
+	visited := make(map[string]bool)
+
+	if err := p.parseWithModules(ctx, path, result, visited); err != nil {
+		return nil, err
 	}
 
+	return result, nil
+}
+
+// parseWithModules parses Terraform files and recursively processes module calls
+func (p *Provider) parseWithModules(ctx context.Context, path string, result *provider.ParseResult, visited map[string]bool) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("accessing path: %w", err)
+	}
+
+	var dir string
 	var files []string
+
 	if info.IsDir() {
+		dir = path
 		entries, err := os.ReadDir(path)
 		if err != nil {
-			return nil, fmt.Errorf("reading directory: %w", err)
+			return fmt.Errorf("reading directory: %w", err)
 		}
 		for _, entry := range entries {
 			if entry.IsDir() {
@@ -94,16 +111,134 @@ func (p *Provider) Parse(ctx context.Context, path string) (*provider.ParseResul
 			}
 		}
 	} else {
+		dir = filepath.Dir(path)
 		files = []string{path}
 	}
 
+	// Normalize and check if already visited
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolving absolute path: %w", err)
+	}
+	if visited[absDir] {
+		return nil // Already processed this directory
+	}
+	visited[absDir] = true
+
+	// Parse files in current directory
 	for _, filePath := range files {
 		if err := p.parseFile(ctx, filePath, result); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("parsing %s: %w", filePath, err))
 		}
 	}
 
-	return result, nil
+	// Use terraform-config-inspect to find module calls
+	if info.IsDir() {
+		module, diags := tfconfig.LoadModule(path)
+		if diags.HasErrors() {
+			result.Errors = append(result.Errors, fmt.Errorf("loading module info: %s", diags.Error()))
+			return nil // Continue without module parsing
+		}
+
+		for name, modCall := range module.ModuleCalls {
+			modPath, err := p.resolveModuleSource(path, modCall.Source)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("resolving module %q: %w", name, err))
+				continue
+			}
+
+			if modPath == "" {
+				// Remote module not downloaded yet
+				result.Errors = append(result.Errors, fmt.Errorf("module %q: remote module not found in .terraform/modules (run 'terraform init' first)", name))
+				continue
+			}
+
+			// Recursively parse the module
+			if err := p.parseWithModules(ctx, modPath, result, visited); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("parsing module %q: %w", name, err))
+			}
+		}
+	}
+
+	return nil
+}
+
+// resolveModuleSource resolves a module source to a local path
+func (p *Provider) resolveModuleSource(basePath, source string) (string, error) {
+	// Local path (starts with ./ or ../ or is absolute)
+	if strings.HasPrefix(source, "./") || strings.HasPrefix(source, "../") {
+		modPath := filepath.Join(basePath, source)
+		if _, err := os.Stat(modPath); err == nil {
+			return modPath, nil
+		}
+		return "", fmt.Errorf("local module path not found: %s", modPath)
+	}
+
+	// Absolute path
+	if filepath.IsAbs(source) {
+		if _, err := os.Stat(source); err == nil {
+			return source, nil
+		}
+		return "", fmt.Errorf("absolute module path not found: %s", source)
+	}
+
+	// Remote module - check .terraform/modules directory
+	// After 'terraform init', modules are downloaded to .terraform/modules/
+	modulesDir := filepath.Join(basePath, ".terraform", "modules")
+	modulesJSON := filepath.Join(modulesDir, "modules.json")
+
+	if _, err := os.Stat(modulesJSON); os.IsNotExist(err) {
+		// .terraform/modules doesn't exist
+		return "", nil
+	}
+
+	// Parse modules.json to find the correct path
+	modPath, err := p.findModuleInManifest(modulesJSON, source)
+	if err != nil {
+		return "", err
+	}
+
+	if modPath != "" {
+		// The path in modules.json is relative to .terraform/modules
+		fullPath := filepath.Join(basePath, modPath)
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath, nil
+		}
+	}
+
+	return "", nil
+}
+
+// findModuleInManifest searches for a module in the Terraform modules manifest
+func (p *Provider) findModuleInManifest(manifestPath, source string) (string, error) {
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse the modules.json file
+	// Format: {"Modules":[{"Key":"...","Source":"...","Dir":"..."},...]}
+	type moduleEntry struct {
+		Key    string `json:"Key"`
+		Source string `json:"Source"`
+		Dir    string `json:"Dir"`
+	}
+	type modulesManifest struct {
+		Modules []moduleEntry `json:"Modules"`
+	}
+
+	var manifest modulesManifest
+	if err := parseJSON(data, &manifest); err != nil {
+		return "", err
+	}
+
+	for _, mod := range manifest.Modules {
+		if mod.Source == source {
+			return mod.Dir, nil
+		}
+	}
+
+	return "", nil
 }
 
 func (p *Provider) parseFile(ctx context.Context, filename string, result *provider.ParseResult) error {
@@ -408,4 +543,9 @@ func ctyToStringSlice(val cty.Value) []string {
 	}
 
 	return result
+}
+
+// parseJSON is a helper to unmarshal JSON data
+func parseJSON(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
 }
