@@ -13,11 +13,11 @@ formatters:
   enable:
     - gofmt
     - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mizzy/least
 
-linters-settings:
-  goimports:
-    local-prefixes: github.com/mizzy/least
-
-issues:
-  exclude-dirs:
+exclusions:
+  paths:
     - testdata
