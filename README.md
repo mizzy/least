@@ -1,5 +1,9 @@
 # least
 
+> [!CAUTION]
+> This is an experimental project and has not been thoroughly tested. It may not work as expected.
+> This project is subject to breaking changes without notice.
+
 Generate least-privilege IAM policies from Infrastructure-as-Code.
 
 `least` analyzes your Terraform configurations and generates minimal IAM policies required to manage the defined resources. It can also check existing policies against requirements to identify over/under permissions.
