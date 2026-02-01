@@ -1,0 +1,63 @@
+data "aws_iam_policy_document" "least_privilege" {
+  statement {
+    sid    = "LeastPrivilege"
+    effect = "Allow"
+
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteAnalyticsConfiguration",
+      "s3:DeleteBucket",
+      "s3:DeleteBucketCORS",
+      "s3:DeleteBucketPublicAccessBlock",
+      "s3:DeleteBucketReplication",
+      "s3:DeleteBucketTagging",
+      "s3:DeleteBucketWebsite",
+      "s3:DeleteEncryptionConfiguration",
+      "s3:DeleteInventoryConfiguration",
+      "s3:DeleteLifecycleConfiguration",
+      "s3:DeleteMetricsConfiguration",
+      "s3:GetAccelerateConfiguration",
+      "s3:GetAnalyticsConfiguration",
+      "s3:GetBucketAcl",
+      "s3:GetBucketCORS",
+      "s3:GetBucketLogging",
+      "s3:GetBucketNotification",
+      "s3:GetBucketObjectLockConfiguration",
+      "s3:GetBucketOwnershipControls",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketTagging",
+      "s3:GetBucketVersioning",
+      "s3:GetBucketWebsite",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetInventoryConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetMetricsConfiguration",
+      "s3:GetObjectAcl",
+      "s3:GetReplicationConfiguration",
+      "s3:ListBucket",
+      "s3:PutAccelerateConfiguration",
+      "s3:PutAnalyticsConfiguration",
+      "s3:PutBucketCORS",
+      "s3:PutBucketLogging",
+      "s3:PutBucketNotification",
+      "s3:PutBucketObjectLockConfiguration",
+      "s3:PutBucketOwnershipControls",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketReplication",
+      "s3:PutBucketTagging",
+      "s3:PutBucketVersioning",
+      "s3:PutBucketWebsite",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutInventoryConfiguration",
+      "s3:PutLifecycleConfiguration",
+      "s3:PutMetricsConfiguration",
+      "s3:PutObjectAcl",
+      "s3:PutReplicationConfiguration",
+    ]
+
+    resources = [
+      "*",
+    ]
+  }
+}
+
