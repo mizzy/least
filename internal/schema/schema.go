@@ -38,9 +38,9 @@ type Handler struct {
 
 // Store manages CloudFormation resource schemas
 type Store struct {
-	schemas   map[string]*ResourceSchema
-	cacheDir  string
-	mu        sync.RWMutex
+	schemas  map[string]*ResourceSchema
+	cacheDir string
+	mu       sync.RWMutex
 }
 
 // NewStore creates a new schema store

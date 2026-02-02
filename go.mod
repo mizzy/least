@@ -7,6 +7,7 @@ require (
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20260120201749-785479628bd7
 	github.com/spf13/cobra v1.10.2
 	github.com/zclconf/go-cty v1.16.3
+	golang.org/x/text v0.25.0
 )
 
 require (
@@ -19,6 +20,5 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 )

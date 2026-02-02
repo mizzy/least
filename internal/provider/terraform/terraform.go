@@ -311,13 +311,13 @@ func (p *Provider) parseFile(ctx context.Context, filename string, result *provi
 
 func detectCloudProvider(resourceType string) string {
 	prefixes := map[string]string{
-		"aws_":        "aws",
-		"azurerm_":    "azure",
-		"google_":     "gcp",
-		"oci_":        "oci",
+		"aws_":          "aws",
+		"azurerm_":      "azure",
+		"google_":       "gcp",
+		"oci_":          "oci",
 		"digitalocean_": "digitalocean",
-		"linode_":     "linode",
-		"alicloud_":   "alicloud",
+		"linode_":       "linode",
+		"alicloud_":     "alicloud",
 	}
 
 	for prefix, cloud := range prefixes {
