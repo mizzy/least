@@ -11,6 +11,7 @@ Generate least-privilege IAM policies from Infrastructure-as-Code.
 ## Features
 
 - **Generate**: Create minimal IAM policies from Terraform code
+- **Specific ARNs**: Generate resource-specific ARNs instead of wildcards for true least-privilege
 - **Check**: Compare existing policies against requirements (for CI/CD)
 - **Multi-provider**: Extensible architecture for future IaC tool support
 
@@ -46,20 +47,39 @@ least generate ./terraform -o policy.tf
 Example output (default: Terraform HCL):
 
 ```hcl
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
 data "aws_iam_policy_document" "least_privilege" {
   statement {
-    sid    = "LeastPrivilege"
+    sid    = "AwsS3BucketMain"
     effect = "Allow"
 
     actions = [
-      "ec2:CreateSecurityGroup",
-      "ec2:DeleteSecurityGroup",
       "s3:CreateBucket",
       "s3:DeleteBucket",
+      # ... other S3 actions
     ]
 
     resources = [
-      "*",
+      "arn:aws:s3:::my-bucket",
+      "arn:aws:s3:::my-bucket/*",
+    ]
+  }
+  statement {
+    sid    = "AwsDynamodbTableMain"
+    effect = "Allow"
+
+    actions = [
+      "dynamodb:CreateTable",
+      "dynamodb:DeleteTable",
+      "dynamodb:DescribeTable",
+      # ... other DynamoDB actions
+    ]
+
+    resources = [
+      "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/my-table",
     ]
   }
 }
@@ -72,15 +92,28 @@ Example output (JSON format with `-f json`):
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "LeastPrivilege",
+      "Sid": "AwsS3BucketMain",
       "Effect": "Allow",
       "Action": [
-        "ec2:CreateSecurityGroup",
-        "ec2:DeleteSecurityGroup",
         "s3:CreateBucket",
         "s3:DeleteBucket"
       ],
-      "Resource": ["*"]
+      "Resource": [
+        "arn:aws:s3:::my-bucket",
+        "arn:aws:s3:::my-bucket/*"
+      ]
+    },
+    {
+      "Sid": "AwsDynamodbTableMain",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/my-table"
+      ]
     }
   ]
 }
@@ -133,6 +166,15 @@ Terraform Resource          CloudFormation Schema         IAM Actions
 aws_s3_bucket        →     AWS::S3::Bucket        →     s3:CreateBucket, ...
 aws_lambda_function  →     AWS::Lambda::Function  →     lambda:CreateFunction, ...
 ```
+
+### Resource-Specific ARNs
+
+`least` generates specific ARNs for each resource instead of wildcards:
+
+- Extracts resource identifiers (bucket names, table names, etc.) from Terraform configs
+- Uses `data.aws_caller_identity.current.account_id` and `data.aws_region.current.name` for dynamic values
+- Generates per-resource policy statements with descriptive Sid names
+- Falls back to wildcards only for resources with runtime-generated IDs (e.g., EC2 instances)
 
 ## Supported Resources
 
