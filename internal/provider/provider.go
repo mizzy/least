@@ -57,6 +57,20 @@ type ParseResult struct {
 	// Policies are IAM policies defined in the IaC code
 	Policies []IAMPolicy
 
+	// AccountRef is the reference to use for AWS account ID in ARNs
+	// e.g., "${data.aws_caller_identity.current.account_id}" or "${var.account_id}"
+	AccountRef string
+
+	// RegionRef is the reference to use for AWS region in ARNs
+	// e.g., "${data.aws_region.current.name}" or "${var.aws_region}"
+	RegionRef string
+
+	// HasCallerIdentity indicates if the source code already has aws_caller_identity data source
+	HasCallerIdentity bool
+
+	// HasRegionData indicates if the source code already has aws_region data source
+	HasRegionData bool
+
 	// Errors encountered during parsing (non-fatal)
 	Errors []error
 }

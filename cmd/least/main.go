@@ -132,7 +132,32 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Found %d resources\n", len(result.Resources))
 
-	gen := policy.New()
+	// Determine account and region references
+	accountRef := result.AccountRef
+	regionRef := result.RegionRef
+
+	// If no references were found in source, use default data source references
+	needCallerIdentity := false
+	needRegion := false
+
+	if accountRef == "" {
+		accountRef = "${data.aws_caller_identity.current.account_id}"
+		needCallerIdentity = !result.HasCallerIdentity
+	}
+	if regionRef == "" {
+		regionRef = "${data.aws_region.current.name}"
+		needRegion = !result.HasRegionData
+	}
+
+	// Create generator with options
+	gen := policy.NewWithOptions(policy.GeneratorOptions{
+		OutputFormat:       format,
+		AccountRef:         accountRef,
+		RegionRef:          regionRef,
+		NeedCallerIdentity: needCallerIdentity,
+		NeedRegion:         needRegion,
+	})
+
 	iamPolicy, err := gen.Generate(result.Resources)
 	if err != nil {
 		return fmt.Errorf("generating policy: %w", err)
@@ -146,7 +171,10 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("converting policy to JSON: %w", err)
 		}
 	case "terraform", "tf":
-		output = iamPolicy.ToTerraform()
+		output = iamPolicy.ToTerraformWithOptions(policy.TerraformOutputOptions{
+			NeedCallerIdentity: needCallerIdentity,
+			NeedRegion:         needRegion,
+		})
 	default:
 		return fmt.Errorf("unsupported format: %s (use 'json' or 'terraform')", format)
 	}
