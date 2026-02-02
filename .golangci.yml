@@ -8,16 +8,18 @@ linters:
     - staticcheck
     - unused
     - misspell
+  exclusions:
+    paths:
+      - testdata
 
 formatters:
   enable:
     - gofmt
     - goimports
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/mizzy/least
-
-issues:
-  exclude-dirs:
-    - testdata
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mizzy/least
+  exclusions:
+    paths:
+      - testdata

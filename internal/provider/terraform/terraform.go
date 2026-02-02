@@ -13,8 +13,9 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
-	"github.com/mizzy/least/internal/provider"
 	"github.com/zclconf/go-cty/cty"
+
+	"github.com/mizzy/least/internal/provider"
 )
 
 // Provider implements the provider.Provider interface for Terraform
@@ -311,13 +312,13 @@ func (p *Provider) parseFile(ctx context.Context, filename string, result *provi
 
 func detectCloudProvider(resourceType string) string {
 	prefixes := map[string]string{
-		"aws_":        "aws",
-		"azurerm_":    "azure",
-		"google_":     "gcp",
-		"oci_":        "oci",
+		"aws_":          "aws",
+		"azurerm_":      "azure",
+		"google_":       "gcp",
+		"oci_":          "oci",
 		"digitalocean_": "digitalocean",
-		"linode_":     "linode",
-		"alicloud_":   "alicloud",
+		"linode_":       "linode",
+		"alicloud_":     "alicloud",
 	}
 
 	for prefix, cloud := range prefixes {

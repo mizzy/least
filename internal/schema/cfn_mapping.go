@@ -1,6 +1,11 @@
 package schema
 
-import "strings"
+import (
+	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
 
 // TerraformToCfnType converts a Terraform resource type to CloudFormation type
 // e.g., "aws_s3_bucket" -> "AWS::S3::Bucket"
@@ -25,9 +30,10 @@ func TerraformToCfnType(tfType string) string {
 	service := strings.ToUpper(parts[0])
 
 	// Rest is resource name in PascalCase
+	caser := cases.Title(language.English)
 	var resourceParts []string
 	for _, p := range parts[1:] {
-		resourceParts = append(resourceParts, strings.Title(p))
+		resourceParts = append(resourceParts, caser.String(p))
 	}
 	resource := strings.Join(resourceParts, "")
 
@@ -73,38 +79,38 @@ func toSnakeCase(s string) string {
 // Explicit mappings where automatic conversion doesn't work
 var tfToCfnMappings = map[string]string{
 	// EC2
-	"aws_instance":                    "AWS::EC2::Instance",
-	"aws_eip":                         "AWS::EC2::EIP",
-	"aws_eip_association":             "AWS::EC2::EIPAssociation",
-	"aws_security_group":              "AWS::EC2::SecurityGroup",
-	"aws_security_group_rule":         "AWS::EC2::SecurityGroupIngress", // partial mapping
-	"aws_network_interface":           "AWS::EC2::NetworkInterface",
-	"aws_key_pair":                    "AWS::EC2::KeyPair",
-	"aws_launch_template":             "AWS::EC2::LaunchTemplate",
-	"aws_placement_group":             "AWS::EC2::PlacementGroup",
+	"aws_instance":            "AWS::EC2::Instance",
+	"aws_eip":                 "AWS::EC2::EIP",
+	"aws_eip_association":     "AWS::EC2::EIPAssociation",
+	"aws_security_group":      "AWS::EC2::SecurityGroup",
+	"aws_security_group_rule": "AWS::EC2::SecurityGroupIngress", // partial mapping
+	"aws_network_interface":   "AWS::EC2::NetworkInterface",
+	"aws_key_pair":            "AWS::EC2::KeyPair",
+	"aws_launch_template":     "AWS::EC2::LaunchTemplate",
+	"aws_placement_group":     "AWS::EC2::PlacementGroup",
 
 	// VPC
-	"aws_vpc":                            "AWS::EC2::VPC",
-	"aws_subnet":                         "AWS::EC2::Subnet",
-	"aws_internet_gateway":               "AWS::EC2::InternetGateway",
-	"aws_nat_gateway":                    "AWS::EC2::NatGateway",
-	"aws_route_table":                    "AWS::EC2::RouteTable",
-	"aws_route":                          "AWS::EC2::Route",
-	"aws_route_table_association":        "AWS::EC2::SubnetRouteTableAssociation",
-	"aws_vpc_endpoint":                   "AWS::EC2::VPCEndpoint",
-	"aws_vpc_peering_connection":         "AWS::EC2::VPCPeeringConnection",
-	"aws_network_acl":                    "AWS::EC2::NetworkAcl",
-	"aws_network_acl_rule":               "AWS::EC2::NetworkAclEntry",
+	"aws_vpc":                     "AWS::EC2::VPC",
+	"aws_subnet":                  "AWS::EC2::Subnet",
+	"aws_internet_gateway":        "AWS::EC2::InternetGateway",
+	"aws_nat_gateway":             "AWS::EC2::NatGateway",
+	"aws_route_table":             "AWS::EC2::RouteTable",
+	"aws_route":                   "AWS::EC2::Route",
+	"aws_route_table_association": "AWS::EC2::SubnetRouteTableAssociation",
+	"aws_vpc_endpoint":            "AWS::EC2::VPCEndpoint",
+	"aws_vpc_peering_connection":  "AWS::EC2::VPCPeeringConnection",
+	"aws_network_acl":             "AWS::EC2::NetworkAcl",
+	"aws_network_acl_rule":        "AWS::EC2::NetworkAclEntry",
 
 	// S3
-	"aws_s3_bucket":                        "AWS::S3::Bucket",
-	"aws_s3_bucket_policy":                 "AWS::S3::BucketPolicy",
-	"aws_s3_bucket_versioning":             "AWS::S3::Bucket", // sub-resource
-	"aws_s3_bucket_acl":                    "AWS::S3::Bucket",
-	"aws_s3_bucket_cors_configuration":     "AWS::S3::Bucket",
+	"aws_s3_bucket":                         "AWS::S3::Bucket",
+	"aws_s3_bucket_policy":                  "AWS::S3::BucketPolicy",
+	"aws_s3_bucket_versioning":              "AWS::S3::Bucket", // sub-resource
+	"aws_s3_bucket_acl":                     "AWS::S3::Bucket",
+	"aws_s3_bucket_cors_configuration":      "AWS::S3::Bucket",
 	"aws_s3_bucket_lifecycle_configuration": "AWS::S3::Bucket",
-	"aws_s3_bucket_logging":                "AWS::S3::Bucket",
-	"aws_s3_bucket_public_access_block":    "AWS::S3::Bucket",
+	"aws_s3_bucket_logging":                 "AWS::S3::Bucket",
+	"aws_s3_bucket_public_access_block":     "AWS::S3::Bucket",
 
 	// IAM
 	"aws_iam_role":                    "AWS::IAM::Role",
@@ -127,16 +133,16 @@ var tfToCfnMappings = map[string]string{
 	"aws_lambda_alias":                "AWS::Lambda::Alias",
 
 	// DynamoDB
-	"aws_dynamodb_table":      "AWS::DynamoDB::Table",
+	"aws_dynamodb_table":        "AWS::DynamoDB::Table",
 	"aws_dynamodb_global_table": "AWS::DynamoDB::GlobalTable",
 
 	// RDS
-	"aws_db_instance":             "AWS::RDS::DBInstance",
-	"aws_db_cluster":              "AWS::RDS::DBCluster",
-	"aws_db_subnet_group":         "AWS::RDS::DBSubnetGroup",
-	"aws_db_parameter_group":      "AWS::RDS::DBParameterGroup",
+	"aws_db_instance":                "AWS::RDS::DBInstance",
+	"aws_db_cluster":                 "AWS::RDS::DBCluster",
+	"aws_db_subnet_group":            "AWS::RDS::DBSubnetGroup",
+	"aws_db_parameter_group":         "AWS::RDS::DBParameterGroup",
 	"aws_db_cluster_parameter_group": "AWS::RDS::DBClusterParameterGroup",
-	"aws_rds_cluster":             "AWS::RDS::DBCluster",
+	"aws_rds_cluster":                "AWS::RDS::DBCluster",
 
 	// ECS
 	"aws_ecs_cluster":         "AWS::ECS::Cluster",
@@ -149,17 +155,17 @@ var tfToCfnMappings = map[string]string{
 	"aws_eks_addon":      "AWS::EKS::Addon",
 
 	// CloudWatch
-	"aws_cloudwatch_log_group":      "AWS::Logs::LogGroup",
-	"aws_cloudwatch_log_stream":     "AWS::Logs::LogStream",
-	"aws_cloudwatch_metric_alarm":   "AWS::CloudWatch::Alarm",
-	"aws_cloudwatch_dashboard":      "AWS::CloudWatch::Dashboard",
+	"aws_cloudwatch_log_group":    "AWS::Logs::LogGroup",
+	"aws_cloudwatch_log_stream":   "AWS::Logs::LogStream",
+	"aws_cloudwatch_metric_alarm": "AWS::CloudWatch::Alarm",
+	"aws_cloudwatch_dashboard":    "AWS::CloudWatch::Dashboard",
 
 	// SNS/SQS
-	"aws_sns_topic":            "AWS::SNS::Topic",
-	"aws_sns_topic_policy":     "AWS::SNS::TopicPolicy",
+	"aws_sns_topic":              "AWS::SNS::Topic",
+	"aws_sns_topic_policy":       "AWS::SNS::TopicPolicy",
 	"aws_sns_topic_subscription": "AWS::SNS::Subscription",
-	"aws_sqs_queue":            "AWS::SQS::Queue",
-	"aws_sqs_queue_policy":     "AWS::SQS::QueuePolicy",
+	"aws_sqs_queue":              "AWS::SQS::Queue",
+	"aws_sqs_queue_policy":       "AWS::SQS::QueuePolicy",
 
 	// API Gateway
 	"aws_api_gateway_rest_api":     "AWS::ApiGateway::RestApi",
@@ -191,7 +197,7 @@ var tfToCfnMappings = map[string]string{
 	"aws_route53_record": "AWS::Route53::RecordSet",
 
 	// CloudFront
-	"aws_cloudfront_distribution":         "AWS::CloudFront::Distribution",
+	"aws_cloudfront_distribution":           "AWS::CloudFront::Distribution",
 	"aws_cloudfront_origin_access_identity": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
 
 	// Elasticache
@@ -226,7 +232,7 @@ var tfToCfnMappings = map[string]string{
 	"aws_cognito_identity_pool":    "AWS::Cognito::IdentityPool",
 
 	// Kinesis
-	"aws_kinesis_stream":          "AWS::Kinesis::Stream",
+	"aws_kinesis_stream":                   "AWS::Kinesis::Stream",
 	"aws_kinesis_firehose_delivery_stream": "AWS::KinesisFirehose::DeliveryStream",
 
 	// Glue
@@ -245,15 +251,15 @@ var tfToCfnMappings = map[string]string{
 	"aws_ecr_repository_policy": "AWS::ECR::Repository",
 
 	// WAF
-	"aws_wafv2_web_acl":                 "AWS::WAFv2::WebACL",
-	"aws_wafv2_ip_set":                  "AWS::WAFv2::IPSet",
-	"aws_wafv2_rule_group":              "AWS::WAFv2::RuleGroup",
+	"aws_wafv2_web_acl":    "AWS::WAFv2::WebACL",
+	"aws_wafv2_ip_set":     "AWS::WAFv2::IPSet",
+	"aws_wafv2_rule_group": "AWS::WAFv2::RuleGroup",
 
 	// Auto Scaling
-	"aws_autoscaling_group":           "AWS::AutoScaling::AutoScalingGroup",
-	"aws_autoscaling_policy":          "AWS::AutoScaling::ScalingPolicy",
-	"aws_autoscaling_schedule":        "AWS::AutoScaling::ScheduledAction",
-	"aws_launch_configuration":        "AWS::AutoScaling::LaunchConfiguration",
+	"aws_autoscaling_group":    "AWS::AutoScaling::AutoScalingGroup",
+	"aws_autoscaling_policy":   "AWS::AutoScaling::ScalingPolicy",
+	"aws_autoscaling_schedule": "AWS::AutoScaling::ScheduledAction",
+	"aws_launch_configuration": "AWS::AutoScaling::LaunchConfiguration",
 
 	// CloudTrail
 	"aws_cloudtrail": "AWS::CloudTrail::Trail",

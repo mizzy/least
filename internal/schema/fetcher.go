@@ -50,10 +50,8 @@ func (f *Fetcher) FetchSchema(ctx context.Context, cfnType string) (*ResourceSch
 		return nil, fmt.Errorf("parsing schema: %w", err)
 	}
 
-	// Cache the schema
-	if err := f.store.LoadSchema([]byte(response.Schema)); err != nil {
-		// Log but don't fail
-	}
+	// Cache the schema (ignore error, just best-effort caching)
+	_ = f.store.LoadSchema([]byte(response.Schema))
 
 	return &schema, nil
 }

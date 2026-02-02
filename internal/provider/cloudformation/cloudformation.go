@@ -101,16 +101,3 @@ func (p *Provider) Parse(ctx context.Context, path string) (*provider.ParseResul
 
 	return nil, fmt.Errorf("CloudFormation provider not yet implemented")
 }
-
-// CloudFormation to Terraform resource type mapping (for future use)
-var cfnToTerraformTypes = map[string]string{
-	"AWS::S3::Bucket":           "aws_s3_bucket",
-	"AWS::EC2::Instance":        "aws_instance",
-	"AWS::EC2::VPC":             "aws_vpc",
-	"AWS::EC2::Subnet":          "aws_subnet",
-	"AWS::EC2::SecurityGroup":   "aws_security_group",
-	"AWS::IAM::Role":            "aws_iam_role",
-	"AWS::IAM::Policy":          "aws_iam_policy",
-	"AWS::Lambda::Function":     "aws_lambda_function",
-	"AWS::DynamoDB::Table":      "aws_dynamodb_table",
-}
