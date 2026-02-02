@@ -13,8 +13,9 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
-	"github.com/mizzy/least/internal/provider"
 	"github.com/zclconf/go-cty/cty"
+
+	"github.com/mizzy/least/internal/provider"
 )
 
 // Provider implements the provider.Provider interface for Terraform

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/mizzy/least/internal/checker"
 	"github.com/mizzy/least/internal/policy"
 	"github.com/mizzy/least/internal/provider"
 	"github.com/mizzy/least/internal/provider/terraform"
-	"github.com/spf13/cobra"
 )
 
 var version = "dev"
