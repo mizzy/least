@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"github.com/zclconf/go-cty/cty"
 
+	"github.com/mizzy/least/internal/mapping"
 	"github.com/mizzy/least/internal/provider"
 )
 
@@ -253,6 +254,25 @@ func (p *Provider) parseFile(ctx context.Context, filename string, result *provi
 		return fmt.Errorf("parsing HCL: %s", diags.Error())
 	}
 
+	// Extract AWS context (account/region references)
+	awsCtx := extractAWSContext(file.Body)
+	if awsCtx.HasCallerIdentity {
+		result.HasCallerIdentity = true
+		if result.AccountRef == "" {
+			result.AccountRef = awsCtx.AccountRef
+		}
+	}
+	if awsCtx.HasRegionData {
+		result.HasRegionData = true
+		if result.RegionRef == "" {
+			result.RegionRef = awsCtx.RegionRef
+		}
+	}
+	// Use provider region reference if data source not found
+	if result.RegionRef == "" && awsCtx.RegionRef != "" {
+		result.RegionRef = awsCtx.RegionRef
+	}
+
 	content, _, diags := file.Body.PartialContent(&hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{
 			{Type: "resource", LabelNames: []string{"type", "name"}},
@@ -273,13 +293,16 @@ func (p *Provider) parseFile(ctx context.Context, filename string, result *provi
 
 		switch block.Type {
 		case "resource":
+			// Extract resource attributes needed for ARN construction
+			attrs := extractResourceAttributes(block.Body, resourceType)
+
 			// Add to resources list
 			res := provider.Resource{
 				Provider:      "terraform",
 				Type:          resourceType,
 				Name:          resourceName,
 				CloudProvider: detectCloudProvider(resourceType),
-				Attributes:    make(map[string]interface{}),
+				Attributes:    attrs,
 				Location: provider.SourceLocation{
 					File: filename,
 					Line: block.DefRange.Start.Line,
@@ -549,4 +572,169 @@ func ctyToStringSlice(val cty.Value) []string {
 // parseJSON is a helper to unmarshal JSON data
 func parseJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
+}
+
+// AttributeValue represents either a literal value or a variable reference
+type AttributeValue struct {
+	Literal   string // Literal value (e.g., "my-bucket")
+	Reference string // Variable reference (e.g., "var.bucket_name")
+}
+
+// extractResourceAttributes extracts attributes needed for ARN construction
+func extractResourceAttributes(body hcl.Body, resourceType string) map[string]interface{} {
+	attrs := make(map[string]interface{})
+
+	// Get the list of attributes we need for ARN construction
+	attrNames := mapping.GetARNAttributes(resourceType)
+	if len(attrNames) == 0 {
+		return attrs
+	}
+
+	// Try to get attributes using JustAttributes first
+	content, diags := body.JustAttributes()
+	if diags.HasErrors() {
+		// If that fails, try PartialContent with attribute schema
+		attrSchemas := make([]hcl.AttributeSchema, len(attrNames))
+		for i, name := range attrNames {
+			attrSchemas[i] = hcl.AttributeSchema{Name: name}
+		}
+		partial, _, _ := body.PartialContent(&hcl.BodySchema{
+			Attributes: attrSchemas,
+		})
+		if partial != nil {
+			content = partial.Attributes
+		}
+	}
+
+	for _, attrName := range attrNames {
+		attr, ok := content[attrName]
+		if !ok {
+			continue
+		}
+
+		// Try to evaluate as a literal value
+		val, valDiags := attr.Expr.Value(nil)
+		if !valDiags.HasErrors() && val.Type() == cty.String {
+			attrs[attrName] = AttributeValue{Literal: val.AsString()}
+		} else {
+			// Extract as a variable reference
+			ref := extractExprReference(attr.Expr)
+			if ref != "" {
+				attrs[attrName] = AttributeValue{Reference: ref}
+			}
+		}
+	}
+
+	return attrs
+}
+
+// extractExprReference extracts a Terraform reference string from an HCL expression
+func extractExprReference(expr hcl.Expression) string {
+	vars := expr.Variables()
+	if len(vars) == 0 {
+		return ""
+	}
+
+	// Build the reference string from the first variable traversal
+	traversal := vars[0]
+	parts := make([]string, 0, len(traversal))
+	for _, step := range traversal {
+		switch t := step.(type) {
+		case hcl.TraverseRoot:
+			parts = append(parts, t.Name)
+		case hcl.TraverseAttr:
+			parts = append(parts, t.Name)
+		case hcl.TraverseIndex:
+			// Handle index access like var.list[0]
+			if t.Key.Type() == cty.String {
+				parts = append(parts, t.Key.AsString())
+			}
+		}
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.Join(parts, ".")
+}
+
+// awsContextInfo holds AWS-specific context extracted from Terraform files
+type awsContextInfo struct {
+	AccountRef        string
+	RegionRef         string
+	HasCallerIdentity bool
+	HasRegionData     bool
+}
+
+// extractAWSContext extracts AWS account/region references from Terraform files
+func extractAWSContext(body hcl.Body) *awsContextInfo {
+	info := &awsContextInfo{}
+
+	content, _, _ := body.PartialContent(&hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "provider", LabelNames: []string{"name"}},
+			{Type: "data", LabelNames: []string{"type", "name"}},
+			{Type: "variable", LabelNames: []string{"name"}},
+			{Type: "locals"},
+		},
+	})
+
+	if content == nil {
+		return info
+	}
+
+	for _, block := range content.Blocks {
+		switch block.Type {
+		case "provider":
+			if len(block.Labels) > 0 && block.Labels[0] == "aws" {
+				extractProviderRegion(block.Body, info)
+			}
+		case "data":
+			if len(block.Labels) >= 2 {
+				dataType := block.Labels[0]
+				switch dataType {
+				case "aws_caller_identity":
+					info.HasCallerIdentity = true
+					info.AccountRef = "${data.aws_caller_identity.current.account_id}"
+				case "aws_region":
+					info.HasRegionData = true
+					info.RegionRef = "${data.aws_region.current.name}"
+				}
+			}
+		}
+	}
+
+	return info
+}
+
+// extractProviderRegion extracts region reference from aws provider block
+func extractProviderRegion(body hcl.Body, info *awsContextInfo) {
+	attrs, diags := body.JustAttributes()
+	if diags.HasErrors() {
+		partial, _, _ := body.PartialContent(&hcl.BodySchema{
+			Attributes: []hcl.AttributeSchema{{Name: "region"}},
+		})
+		if partial != nil {
+			attrs = partial.Attributes
+		}
+	}
+
+	regionAttr, ok := attrs["region"]
+	if !ok {
+		return
+	}
+
+	// Try to get literal value
+	val, valDiags := regionAttr.Expr.Value(nil)
+	if !valDiags.HasErrors() && val.Type() == cty.String {
+		// Region is a literal value - we still need data source for dynamic use
+		return
+	}
+
+	// Region is a variable reference
+	ref := extractExprReference(regionAttr.Expr)
+	if ref != "" {
+		info.RegionRef = "${" + ref + "}"
+	}
 }
