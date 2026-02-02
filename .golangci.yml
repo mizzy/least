@@ -8,6 +8,9 @@ linters:
     - staticcheck
     - unused
     - misspell
+  exclusions:
+    paths:
+      - testdata
 
 formatters:
   enable:
@@ -17,7 +20,6 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/mizzy/least
-
-exclusions:
-  paths:
-    - testdata
+  exclusions:
+    paths:
+      - testdata
